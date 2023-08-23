@@ -1,0 +1,85 @@
+#!/bin/bash
+
+# Prompt the user for the directory
+DIR=$1
+
+# Check if the directory exists
+if [ ! -d "$DIR" ]; then
+    echo "Error: Directory $DIR does not exist."
+    exit 1
+fi
+
+# Convert to absolute path
+dir=$(realpath "$DIR")
+
+# Check if the directory is already in PATH
+if echo "$PATH" | grep -q "$dir"; then
+    echo "Directory $dir is already in PATH."
+    exit 0
+fi
+
+# Detect shell and associated config file
+case $SHELL in
+    /bin/bash | /usr/bin/bash | /usr/local/bin/bash)
+        CONFIG_FILE=~/.bashrc
+        ;;
+    /bin/zsh | /usr/bin/zsh | /usr/local/bin/zsh)
+        CONFIG_FILE=~/.zshrc
+        ;;
+    /usr/local/bin/fish | /usr/bin/fish | /bin/fish)
+        CONFIG_FILE=~/.config/fish/config.fish
+        ;;
+    *)
+        echo "Unsupported shell: $SHELL"
+        exit 1
+        ;;
+esac
+
+
+function remove_duplicates() {
+    echo "$1" | tr ':' '\n' | nl | sort -u -k2,2 | sort -n | cut -f2 | paste -sd:
+}
+
+# Update the config file for the shell
+if [[ "$SHELL" =~ bash|zsh ]]; then
+    # Uncomment the PATH if it's commented
+    sed -i.bak 's|^# \(export PATH=\)|\1|' $CONFIG_FILE
+
+    # Get the current PATH from the config file
+    current_path=$(grep "export PATH=" $CONFIG_FILE | cut -d'=' -f2-)
+
+    # Add directory to PATH only if it isn't already present
+    if ! echo "$current_path" | grep -q "$dir"; then
+        current_path="${current_path}:${dir}"
+    fi
+
+    # Remove duplicates
+    unique_path=$(remove_duplicates "$current_path")
+
+    # Update the config file with the unique PATH
+    sed -i.bak "s|export PATH=.*|export PATH=${unique_path}|" $CONFIG_FILE
+
+elif [[ "$SHELL" =~ fish ]]; then
+    # Uncomment the PATH if it's commented in fish
+    sed -i.bak 's|^# \(set -gx PATH\)|\1|' $CONFIG_FILE
+
+    # Get the current fish PATH
+    current_fish_path=$(grep "set -gx PATH" $CONFIG_FILE | cut -d' ' -f3-)
+
+    # Add directory to fish PATH only if it isn't present
+    if ! echo "$current_fish_path" | grep -q "$dir"; then
+        current_fish_path="$current_fish_path $dir"
+    fi
+
+    # Remove duplicates for fish shell
+    unique_fish_path=$(remove_duplicates "$current_fish_path" | tr ':' ' ')
+    # Update the config file with the unique fish PATH
+    sed -i.bak "s|set -gx PATH .*|set -gx PATH ${unique_fish_path}|" $CONFIG_FILE
+
+else
+    echo "Unsupported shell: $SHELL"
+    exit 1
+fi
+
+echo "$dir added to PATH. Please restart your terminal or re-source your config."
+

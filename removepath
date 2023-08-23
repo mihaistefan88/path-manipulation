@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# Prompt the user for the directory
+DIR=$1
+
+# Convert to absolute path
+dir=$(realpath "$DIR")
+
+# Check if the directory is not in PATH
+if ! echo "$PATH" | grep -q "$dir"; then
+    echo "Directory $dir is not in PATH."
+    exit 0
+fi
+
+# Detect shell and associated config file
+case $SHELL in
+    /bin/bash | /usr/bin/bash | /usr/local/bin/bash)
+        CONFIG_FILE=~/.bashrc
+        ;;
+    /bin/zsh | /usr/bin/zsh | /usr/local/bin/zsh)
+        CONFIG_FILE=~/.zshrc
+        ;;
+    /usr/local/bin/fish | /usr/bin/fish | /bin/fish)
+        CONFIG_FILE=~/.config/fish/config.fish
+        ;;
+    *)
+        echo "Unsupported shell: $SHELL"
+        exit 1
+        ;;
+esac
+
+function remove_from_list() {
+    echo "$1" | tr ':' '\n' | grep -v "^$2$" | paste -sd:
+}
+
+# Update the config file for the shell
+if [[ "$SHELL" =~ bash|zsh ]]; then
+    # Uncomment the PATH if it's commented
+    sed -i.bak 's|^# \(export PATH=\)|\1|' $CONFIG_FILE
+
+    # Get the current PATH from the config file
+    current_path=$(grep "export PATH=" $CONFIG_FILE | cut -d'=' -f2-)
+
+    # Remove the directory from PATH
+    new_path=$(remove_from_list "$current_path" "$dir")
+
+    # Update the config file with the new PATH
+    sed -i.bak "s|export PATH=.*|export PATH=${new_path}|" $CONFIG_FILE
+
+elif [[ "$SHELL" =~ fish ]]; then
+    # Uncomment the PATH if it's commented in fish
+    sed -i.bak 's|^# \(set -gx PATH\)|\1|' $CONFIG_FILE
+
+    # Get the current fish PATH
+    current_fish_path=$(grep "set -gx PATH" $CONFIG_FILE | cut -d' ' -f3- | tr ' ' ':')
+
+    # Remove the directory from fish PATH
+    new_fish_path=$(remove_from_list "$current_fish_path" "$dir" | tr ':' ' ')
+
+    # Update the config file with the new fish PATH
+    sed -i.bak "s|set -gx PATH .*|set -gx PATH ${new_fish_path}|" $CONFIG_FILE
+
+else
+    echo "Unsupported shell: $SHELL"
+    exit 1
+fi
+
+echo "$dir removed from PATH. Please restart your terminal or re-source your config."
