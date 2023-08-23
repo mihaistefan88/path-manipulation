@@ -21,5 +21,6 @@ To install the scripts and make them available system-wide, run:
     chmod +x install.sh
     sudo ./install.sh
 ```
-License
-MIT
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
